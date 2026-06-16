@@ -467,6 +467,7 @@
             flex-wrap: wrap;
         }
 
+        /* СТРАНИЦА ЛОГОВ */
         .logs-container {
             max-height: 600px;
             overflow-y: auto;
@@ -748,6 +749,7 @@
         <button class="nav-tab active" data-page="page1">💸 Выплаты</button>
         <button class="nav-tab" data-page="page2">👥 Участники</button>
         <button class="nav-tab" data-page="page3">📝 Контракты</button>
+        <button class="nav-tab" data-page="page4">📋 Логи</button>
     </div>
 
     <!-- СТРАНИЦА 1 - Основная -->
@@ -855,6 +857,20 @@
             <div class="info-text" style="margin-top:12px;">* Редактируйте список контрактов. Суммы сразу отображаются на странице "Выплаты"</div>
         </div>
     </div>
+
+    <!-- СТРАНИЦА 4 - ЛОГИ -->
+    <div id="page4" class="page">
+        <div class="page-card">
+            <div class="page-title">📋 Журнал действий</div>
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+                <button id="clearLogsBtn" class="clear-logs-btn">🗑️ Очистить логи</button>
+            </div>
+            <div id="logsContainer" class="logs-container">
+                <div style="color:#6b7280; text-align:center; padding:20px;">Загрузка логов...</div>
+            </div>
+            <button id="backFromLogsBtn" class="bottom-nav-btn back-btn" style="margin-top:24px;">⬅️ Вернуться</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -945,6 +961,8 @@
     const roleBadge = document.getElementById('roleBadge');
     const logoutBtn = document.getElementById('logoutBtn');
     const viewLogsBtn = document.getElementById('viewLogsBtn');
+    const clearLogsBtn = document.getElementById('clearLogsBtn');
+    const backFromLogsBtn = document.getElementById('backFromLogsBtn');
     const syncStatusSpan = document.getElementById('syncStatus');
     const userSelect = document.getElementById('userSelect');
     const nickInput = document.getElementById('nickInput');
@@ -960,6 +978,48 @@
     const addContractBtn = document.getElementById('addContractBtn');
     const compactContractsTable = document.getElementById('compactContractsTable');
     const formContainer1 = document.getElementById('formContainer1');
+    const logsContainer = document.getElementById('logsContainer');
+
+    // ==================== ЛОГИ ====================
+    function renderLogs() {
+        if (!logsContainer) return;
+        if (actionLogs.length === 0) {
+            logsContainer.innerHTML = '<div style="color:#6b7280; text-align:center; padding:20px;">📭 Логов пока нет</div>';
+            return;
+        }
+        let html = '';
+        for (let log of actionLogs) {
+            let borderColor = '#3b82f6';
+            if (log.action.includes('Очистка') || log.action.includes('Удаление')) borderColor = '#ef4444';
+            else if (log.action.includes('Вход') || log.action.includes('Авторизация')) borderColor = '#10b981';
+            else if (log.action.includes('Добавление') || log.action.includes('Обновление')) borderColor = '#eab308';
+            else if (log.action.includes('Копирование')) borderColor = '#8b5cf6';
+            
+            html += `<div class="log-entry" style="border-left-color: ${borderColor};">
+                        <div class="log-header">
+                            <span class="log-time">🕒 ${log.timestamp}</span>
+                            <span class="log-user">👤 ${escapeHtml(log.user)}</span>
+                        </div>
+                        <div class="log-action">📌 ${escapeHtml(log.action)}</div>
+                        <div class="log-details">${escapeHtml(log.details)}</div>
+                     </div>`;
+        }
+        logsContainer.innerHTML = html;
+    }
+
+    function clearLogs() {
+        if (currentUserRole !== 'admin') {
+            alert('⛔ У вас нет прав на очистку логов');
+            return;
+        }
+        if (confirm("Очистить всю историю действий?")) {
+            actionLogs = [];
+            localStorage.setItem('action_logs', JSON.stringify(actionLogs));
+            renderLogs();
+            addLogInternal(currentUser || "Система", "🧹 Очистка логов", "История действий очищена");
+            alert('✅ Логи очищены');
+        }
+    }
 
     // ==================== УПРАВЛЕНИЕ ДОСТУПОМ ====================
     function updateUIForRole(role) {
@@ -974,10 +1034,9 @@
             roleBadge.className = 'role-badge viewer';
         }
         
-        // Админские кнопки
         const adminElements = [
             addBtn, clearFormBtn, clearTableBtn, copyListBtn,
-            addUserRowBtn, addContractBtn
+            addUserRowBtn, addContractBtn, clearLogsBtn
         ];
         
         adminElements.forEach(el => {
@@ -994,12 +1053,10 @@
             }
         });
 
-        // Форма ввода
         if (formContainer1) {
             formContainer1.style.display = isAdmin ? 'flex' : 'none';
         }
 
-        // Вкладки "Участники" и "Контракты"
         const navTabs = document.querySelectorAll('.nav-tab');
         navTabs.forEach(tab => {
             const page = tab.dataset.page;
@@ -1029,6 +1086,7 @@
         if (pageId === 'page2') renderUsersTable();
         if (pageId === 'page3') renderContractsTable();
         if (pageId === 'page1') renderCompactContracts();
+        if (pageId === 'page4') renderLogs();
     }
 
     document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -1039,6 +1097,23 @@
             switchToPage(this.dataset.page);
         });
     });
+
+    // Кнопка "Логи" в хедере
+    viewLogsBtn.addEventListener('click', function() {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.nav-tab[data-page="page4"]').classList.add('active');
+        switchToPage('page4');
+    });
+
+    // Кнопка "Вернуться" из логов
+    backFromLogsBtn.addEventListener('click', function() {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.nav-tab[data-page="page1"]').classList.add('active');
+        switchToPage('page1');
+    });
+
+    // Кнопка "Очистить логи"
+    clearLogsBtn.addEventListener('click', clearLogs);
 
     // ==================== КОНТРАКТЫ ====================
     async function loadContracts() {
@@ -1378,6 +1453,7 @@
         actionLogs.unshift({ timestamp, user, action, details });
         if (actionLogs.length > 500) actionLogs.pop();
         localStorage.setItem('action_logs', JSON.stringify(actionLogs));
+        renderLogs();
     }
 
     function addLog(action, details) {
@@ -1499,6 +1575,7 @@
             actionLogs = savedLogs ? JSON.parse(savedLogs) : [];
             renderTable();
             renderCompactContracts();
+            renderLogs();
             
             updateUIForRole(currentUserRole);
             
